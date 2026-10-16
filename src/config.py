@@ -29,7 +29,7 @@ SFACE_MODEL = MODELS_DIR / "face_recognition_sface_2021dec.onnx"
 # --- Réseau / ESP32-CAM -----------------------------------------------------
 # Adresse par défaut de l'ESP32-CAM sur le réseau local.
 # À modifier quand tu connaîtras son IP réelle.
-ESP32_URL = "http://192.168.1.50/capture"
+ESP32_URL = "http://10.135.250.228/capture"
 HTTP_TIMEOUT_SECONDS = 5
 
 # --- Paramètres images ------------------------------------------------------
