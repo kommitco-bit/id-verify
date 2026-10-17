@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from config import SAMPLES_DIR
+from config import CARD_HEIGHT, CARD_WIDTH, SAMPLES_DIR
 
 
 def load_image(path: str) -> np.ndarray | None:
@@ -155,6 +155,106 @@ def demo_canny(input_path: str, low: int = 50, high: int = 150) -> None:
     )
     if save_image(edges, out):
         print(f"OK : Canny ({low},{high}) -> {out}")
+
+
+# --- Ajout J6 : prepare_card (V2 detection auto, V1 non integree) ---
+# prepare_card est dans le contrat §6. V1 (cadre-guide) sera cablee via l'UI.
+
+
+def _order_corners(pts):
+    """Ordonne 4 points : TL, TR, BR, BL (float32)."""
+    pts = pts.reshape(4, 2).astype("float32")
+    s = pts.sum(axis=1)
+    tl = pts[int(np.argmin(s))]
+    br = pts[int(np.argmax(s))]
+    d = np.diff(pts, axis=1).ravel()
+    tr = pts[int(np.argmin(d))]
+    bl = pts[int(np.argmax(d))]
+    return np.array([tl, tr, br, bl], dtype="float32")
+
+
+def _quad_min_side(corners):
+    """Longueur du plus petit cote du quadrilatere (en pixels)."""
+    sides = []
+    for i in range(4):
+        p1 = corners[i]
+        p2 = corners[(i + 1) % 4]
+        sides.append(float(np.linalg.norm(p1 - p2)))
+    return min(sides)
+
+
+def _detect_card_quad(img):
+    """V2 : detection auto. Renvoie 4 coins ordonnes (float32) ou None."""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (7, 7), 0)
+    _, otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    edges = cv2.Canny(otsu, 50, 150)
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((5, 5), "uint8"))
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    img_area = img.shape[0] * img.shape[1]
+    quads = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        if area < 0.02 * img_area:
+            continue
+        hull = cv2.convexHull(c)
+        peri = cv2.arcLength(hull, True)
+        for eps_ratio in (0.01, 0.02, 0.03, 0.05, 0.08):
+            approx = cv2.approxPolyDP(hull, eps_ratio * peri, True)
+            if len(approx) != 4 or not cv2.isContourConvex(approx):
+                continue
+            x, y, w, h = cv2.boundingRect(approx)
+            if w * h == 0:
+                continue
+            if cv2.contourArea(approx) / (w * h) < 0.55:
+                continue
+            quads.append(approx)
+    if not quads:
+        return None
+    quads.sort(key=cv2.contourArea, reverse=True)
+    best = quads[0]
+    if cv2.contourArea(best) < 0.05 * img_area:
+        return None
+    ordered = _order_corners(best)
+    if _quad_min_side(ordered) < 150:
+        return None
+    return ordered
+
+
+def prepare_card(img):
+    """Redresse la carte en 1000x630 (BGR) ou renvoie None.
+
+    Cas 1 : l'image est deja au format carte (ratio proche, taille suffisante)
+            -> simple resize, la carte remplit deja l'image.
+    Cas 2 : detection auto des 4 coins + transformation de perspective.
+    """
+
+    if img is None:
+        return None
+
+    h, w = img.shape[:2]
+    ratio_img = w / h
+    ratio_card = CARD_WIDTH / CARD_HEIGHT
+
+    # Cas 1 : format deja carte -> pas de redressement, juste resize
+    if abs(ratio_img - ratio_card) / ratio_card < 0.10 and w >= 600 and h >= 375:
+        return cv2.resize(img, (CARD_WIDTH, CARD_HEIGHT), interpolation=cv2.INTER_AREA)
+
+    # Cas 2 : detection auto des 4 coins + perspective
+    corners = _detect_card_quad(img)
+    if corners is None:
+        return None
+    dst = np.array(
+        [
+            [0, 0],
+            [CARD_WIDTH - 1, 0],
+            [CARD_WIDTH - 1, CARD_HEIGHT - 1],
+            [0, CARD_HEIGHT - 1],
+        ],
+        dtype="float32",
+    )
+    matrix = cv2.getPerspectiveTransform(corners, dst)
+    return cv2.warpPerspective(img, matrix, (CARD_WIDTH, CARD_HEIGHT))
 
 
 if __name__ == "__main__":
