@@ -1,5 +1,5 @@
 # src/imaging.py
-# Outils d'image : chargement, gris, sauvegarde, flou (J5), resize (J5), seuillage (J5).
+# Outils d'image : chargement, gris, sauvegarde, flou, resize, seuillage, Canny (J5).
 
 import sys
 from pathlib import Path
@@ -53,10 +53,8 @@ def resize_image(img: np.ndarray, width: int, height: int) -> np.ndarray | None:
 
 
 def apply_threshold(gray: np.ndarray, threshold: int = 127) -> np.ndarray | None:
-    """Seuil fixe : < threshold -> 0 (noir), >= threshold -> 255 (blanc)."""
     if gray is None:
         return None
-    # S'assure qu'on travaille bien sur une image 1 canal.
     if gray.ndim == 3:
         gray = to_grayscale(gray)
     _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
@@ -64,14 +62,24 @@ def apply_threshold(gray: np.ndarray, threshold: int = 127) -> np.ndarray | None
 
 
 def apply_otsu(gray: np.ndarray) -> np.ndarray | None:
-    """Seuil automatique (Otsu) : choisit la coupure la plus discriminante."""
     if gray is None:
         return None
     if gray.ndim == 3:
         gray = to_grayscale(gray)
-    # THRESH_OTSU ignore la valeur 0 passée : Otsu la remplace par le seuil calculé.
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return binary
+
+
+def detect_edges(img: np.ndarray, low: int = 50, high: int = 150) -> np.ndarray | None:
+    """Canny : contours blancs sur fond noir. Flou léger préalable recommandé."""
+    if img is None:
+        return None
+    # Canny n'accepte qu'une image 1 canal.
+    if img.ndim == 3:
+        img = to_grayscale(img)
+    # Flou léger pour atténuer le bruit avant le calcul du gradient.
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+    return cv2.Canny(img, low, high)
 
 
 def demo_gray(input_path: str) -> None:
@@ -135,16 +143,33 @@ def demo_threshold(input_path: str, threshold_value: int = 127) -> None:
         print(f"OK : seuil Otsu -> {out_otsu}")
 
 
+def demo_canny(input_path: str, low: int = 50, high: int = 150) -> None:
+    img = load_image(input_path)
+    if img is None:
+        return
+    edges = detect_edges(img, low, high)
+    if edges is None:
+        return
+    out = str(
+        Path(input_path).with_name(Path(input_path).stem + f"_canny_{low}_{high}.jpg")
+    )
+    if save_image(edges, out):
+        print(f"OK : Canny ({low},{high}) -> {out}")
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
-            "Usage : python imaging.py data/samples/carte_fictive_01.jpg [kernel] [seuil]"
+            "Usage : python imaging.py data/samples/carte_fictive_01.jpg [kernel] [seuil] [low] [high]"
         )
         sys.exit(1)
     kernel = int(sys.argv[2]) if len(sys.argv) > 2 else 5
     seuil = int(sys.argv[3]) if len(sys.argv) > 3 else 127
+    low = int(sys.argv[4]) if len(sys.argv) > 4 else 50
+    high = int(sys.argv[5]) if len(sys.argv) > 5 else 150
     src = sys.argv[1]
     demo_gray(src)
     demo_blur(src, kernel)
     demo_resize(src, 500, 315)
     demo_threshold(src, seuil)
+    demo_canny(src, low, high)
