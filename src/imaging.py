@@ -1,38 +1,27 @@
-"""Module imaging — opérations de base sur les images.
+# src/imaging.py
+# Outils d'image : chargement, gris, sauvegarde, et (J5) flou gaussien.
+# Identifiants en anglais (snake_case), commentaires en français.
 
-J1 : charger une image, afficher sa taille, la passer en niveaux de gris
-et la sauvegarder. Le redressement de carte (prepare_card) viendra plus tard.
-"""
-
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-from config import SAMPLES_DIR, ensure_dirs
+from config import SAMPLES_DIR
 
 
 def load_image(path: str) -> np.ndarray | None:
-    """Charge une image depuis le disque.
-
-    Entrée : chemin vers un fichier image.
-    Sortie : tableau numpy BGR, ou None si le fichier est introuvable/illisible.
-    """
-    p = Path(path)
-    if not p.exists():
-        print(f"[imaging] Fichier introuvable : {p}")
-        return None
-
-    img = cv2.imread(str(p), cv2.IMREAD_COLOR)
+    """Charge une image en BGR. Renvoie None en cas d'échec."""
+    img = cv2.imread(path)
     if img is None:
-        print(f"[imaging] Impossible de lire l'image : {p}")
+        print(f"ERREUR : impossible de lire {path}")
         return None
-
     return img
 
 
 def describe_image(img: np.ndarray) -> tuple[int, int, int]:
-    """Renvoie (hauteur, largeur, nombre_de_canaux) d'une image BGR."""
+    """Renvoie (hauteur, largeur, canaux) d'une image."""
     h, w = img.shape[:2]
     c = img.shape[2] if img.ndim == 3 else 1
     return h, w, c
@@ -44,43 +33,56 @@ def to_grayscale(img: np.ndarray) -> np.ndarray:
 
 
 def save_image(img: np.ndarray, path: str) -> bool:
-    """Sauvegarde une image sur le disque.
-
-    Renvoie True si l'écriture a réussi, False sinon.
-    """
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    ok = cv2.imwrite(str(p), img)
+    """Sauvegarde une image. Renvoie True si succès, False sinon."""
+    ok = cv2.imwrite(path, img)
     if not ok:
-        print(f"[imaging] Échec de l'écriture : {p}")
+        print(f"ERREUR : impossible d'écrire {path}")
     return ok
 
 
-def demo_gray(input_path: str) -> None:
-    """Scénario J1 : charge, décrit, passe en gris, sauvegarde."""
-    ensure_dirs()
+def apply_blur(img: np.ndarray, kernel_size: int = 5) -> np.ndarray | None:
+    """Applique un flou gaussien. kernel_size doit être impair (3, 5, 7...)."""
+    if img is None:
+        return None
+    # Un noyau gaussien doit être impair et >= 3, sinon OpenCV lève une erreur.
+    k = max(3, kernel_size)
+    if k % 2 == 0:
+        k += 1
+    return cv2.GaussianBlur(img, (k, k), 0)
 
+
+def demo_gray(input_path: str) -> None:
+    """Démo existante (J1) : charge, décrit, convertit en gris, sauvegarde."""
     img = load_image(input_path)
     if img is None:
         return
-
     h, w, c = describe_image(img)
-    print(f"Image chargée : {w} x {h} pixels, {c} canal(aux).")
-
+    print(f"Image chargée : {w}x{h}, {c} canaux")
     gray = to_grayscale(img)
+    out = str(Path(input_path).with_name(Path(input_path).stem + "_gray.jpg"))
+    if save_image(gray, out):
+        print(f"OK : gris sauvegardé -> {out}")
 
-    stem = Path(input_path).stem
-    out_path = SAMPLES_DIR / f"{stem}_gray.jpg"
-    if save_image(gray, str(out_path)):
-        print(f"Image grise sauvegardée : {out_path}")
+
+def demo_blur(input_path: str, kernel_size: int = 5) -> None:
+    """Démo J5 : flou gaussien et sauvegarde pour comparaison visuelle."""
+    img = load_image(input_path)
+    if img is None:
+        return
+    blurred = apply_blur(img, kernel_size)
+    if blurred is None:
+        return
+    out = str(Path(input_path).with_name(Path(input_path).stem + "_blur.jpg"))
+    if save_image(blurred, out):
+        print(f"OK : flou (k={kernel_size}) sauvegardé -> {out}")
 
 
 if __name__ == "__main__":
-    # Test rapide : remplace par le chemin d'une image de test.
-    # Exemple : une photo quelconque dans data/samples/.
-    import sys
-
+    # Usage : python imaging.py <chemin_image> [kernel]
     if len(sys.argv) < 2:
-        print("Usage : python src/imaging.py <chemin_image>")
-    else:
-        demo_gray(sys.argv[1])
+        print("Usage : python imaging.py data/samples/carte_fictive_01.jpg [kernel]")
+        sys.exit(1)
+    kernel = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+    src = sys.argv[1]
+    demo_gray(src)
+    demo_blur(src, kernel)
