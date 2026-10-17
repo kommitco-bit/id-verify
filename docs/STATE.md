@@ -1,86 +1,108 @@
-# STATE.md — mis à jour le 17/10, jour 6, avec DeepSeek
+# STATE.md — mis à jour le 18/10, jour 7, avec DeepSeek
+
+<!-- À vérifier : si tu es encore le 17/10, ajuste la date en tête -->
 
 ## Terminé et testé
 
-- **Environnement** : venv Python **3.14.4** confirmé et retenu. Le problème Qt/Wayland est contourné avec `QT_QPA_PLATFORM=xcb`.
+- **Environnement** : venv Python **3.14.4** confirmé. Contournement Qt/Wayland toujours en place (`QT_QPA_PLATFORM=xcb`).
 - **Arborescence** : `~/Documents/DevOps/Projet/id-verif/` confirmée.
-- **J2, J3, J4** : ESP32-CAM (`/` et `/capture`) fonctionnel, `src/capture.py` (3 sources) fonctionnel, 10 cartes fictives générées.
-- **J5** : `imaging.py` (flou, resize, seuil, Otsu, Canny) fonctionnel, testé sur 13/13 cartes.
-- **J6 (17/10) — Redresser la carte (1/2)** :
-  - **Notions vues** : contours (Canny), enveloppe convexe (`convexHull`), approximation de polygone (`approxPolyDP`), 4 coins, transformation de perspective (`getPerspectiveTransform`, `warpPerspective`), ratio d'image.
-  - **`src/imaging.py` mis à jour** : ajout de `prepare_card(img) -> np.ndarray | None` (contrat §6 respecté).
-  - **Logique de `prepare_card`** :
-    1. Si l'image a déjà le bon ratio (1000/630 ± 10%) et une taille ≥ 600×375 (ex: carte scannée ou déjà recadrée), un simple `resize` est fait.
-    2. Sinon, détection auto des 4 coins (V2) + transformation de perspective.
-    3. Si la détection échoue, renvoie `None` (pas de recadrage "au hasard").
-  - **Outils pédagogiques hors contrat §6 créés et testés** : `test/demo_quad.py` (visualisation des contours/coins), `test/demo_perspective.py` (redressement à partir d'un cadre simulé), `test/test_prepare_card.py` (validation sur plusieurs images).
-  - **Confirmé par l'étudiant** : `prepare_card` fonctionne sur les cartes fictives (1000×630) et sur les cartes scannées (Belge, RDC 1000×630). Le pipeline peut passer à la suite.
+- **J2, J3, J4** : ESP32-CAM (`/` et `/capture`) fonctionnel, `src/capture.py` (3 sources) fonctionnel.
+- **J5** : `imaging.py` (flou, resize, seuil, Otsu, Canny) fonctionnel.
+- **J6 (17/10)** : `prepare_card(img) -> np.ndarray | None` fonctionnel (détection V2 + transformation de perspective + resize direct si déjà au bon format). Testé et confirmé par l'étudiant.
+- **J7 (18/10) — OCR** :
+  - **Tesseract 5.5.0** installé et vérifié sur Ubuntu ; pack **`fra`** présent (`tesseract --list-langs` confirme).
+  - **`pytesseract` + `Pillow`** installés dans le venv. Test d'import : `pytesseract.get_tesseract_version() == 5.5.0`. Test lecture de texte français synthétique (`'Nom : KABILA'`) : OK.
+  - **`src/ocr.py` V1** créé, conforme au contrat §6 :
+    - `_preprocess(card_img)` : gris → upscale `INTER_CUBIC` si largeur < 1500 → binarisation Otsu.
+    - `extract_raw_text(card_img) -> str` : appelle Tesseract avec `lang='fra'` et `--psm 6`.
+  - **`test/test_ocr_raw.py`** créé : boucle sur les cartes, filtre par regex `carte_fictive_\d{2}\.jpg` (`re.fullmatch`) pour ignorer les variantes `_gray`, `_blur`, `_otsu`, `_thr_*`, `_canny_*`, `_resize_*`, `_1000x630`.
+  - **`src/ocr.py` V2** : ajout de `extract_fields(card_img) -> dict` (contrat §6 respecté : clés `nom`, `postnom`, `prenom`, `date_naissance`, `numero`, `raw_text`). Regex ancrées sur les étiquettes de la carte (`Nom :`, `Postnom/Prenom :`, `Date / Lieu de naissance :`, `NI./N.I./NL:`).
+  - **Bug trouvé et corrigé** dans `_RE_NUM` : `[I.L]` matchait le `.` au lieu du `I` de `N.I.` → remplacé par `\.?[IL1]\.?`. Carte 02 renvoyait `numero = None`, maintenant `'D3219824'`.
+  - **Résultat confirmé par l'étudiant** : les **4 cartes fictives disponibles** extraient les **5 champs correctement** (20/20 champs lus).
 
 ## En cours ou bloqué
 
-- **`src/ocr.py` reste RETIRÉ DU PÉRIMÈTRE ACTIF** : ne pas le compter comme terminé, ne pas le tester, ne pas le proposer avant le jour OCR prévu.
-- **Version 1 de `prepare_card` (cadre-guide)** : la V1 (affichage d'un cadre à l'écran pour que l'utilisateur aligne la carte) n'est **pas encore câblée**. Elle est reportée à l'étape `ui.py` (customtkinter), car il faut un affichage réel pour que l'utilisateur interagisse.
-- **Limites de la V2** : les photos téléphones très petites (ex: `test5.jpeg` en 352×567) sont rejetées par `prepare_card` car le côté minimum de la carte est < 150 px (OCR impossible). C'est une limite assumée, documentée, qui sera compensée par la V1 dans l'UI.
-- **Imports `src/`** : toujours gérés par `sys.path.insert` dans les tests. Une solution propre (package) est en attente (**PROPOSITION DE CHANGEMENT à venir**).
-- **Nettoyage `data/samples/`** : les variantes `_gray`, `_blur`, etc., générées en J5 polluent le dossier. À filtrer ou nettoyer avant les prochains modules.
-- **IP de l'ESP32** : toujours en DHCP (`10.135.250.228`), réservation à envisager (**PROPOSITION DE CHANGEMENT à venir**).
+- **Jeu de données J7 incomplet** : seulement **4 cartes** (`carte_fictive_01..04.jpg`) disponibles dans `data/samples/`. Les cartes `05` à `10` sont absentes (soit supprimées, soit jamais générées). Le livrable J7 demande un tableau sur 10 cartes → **limite assumée et documentée** ci-dessous. À regénérer via le script J3/J4 quand pertinent.
+- **`src/imaging.py`** : V1 du cadre-guide (`prepare_card` interactif) toujours **non câblée**. Prévue pour l'étape `ui.py` (customtkinter), car elle nécessite un affichage réel.
+- **Imports `src/`** : toujours gérés par `sys.path.insert` dans les tests. Solution propre (package Python) toujours **en attente** (PROPOSITION DE CHANGEMENT à venir).
+- **`data/samples/`** : les variantes `_gray`, `_blur`, `_otsu`, `_thr_*`, `_canny_*`, `_resize_*`, `_1000x630` ont été **retirées** par l'étudiant pendant J7 (il ne reste que les 4 cartes propres). Le filtre regex dans `test_ocr_raw.py` reste en place comme garde-fou futur.
+- **IP de l'ESP32** : toujours en DHCP (`10.135.250.228`), réservation à envisager (PROPOSITION à venir).
 
 ## Décisions prises (et pourquoi)
 
-- **17/10 (J6)** — Python 3.14.4 conservé. Raison : choisi par l'étudiant, fonctionne avec le contournement Qt.
-- **17/10 (J6)** — Commencer par la V2 (détection auto) au lieu de la V1 (cadre-guide). Raison : demande de l'étudiant, plus rapide à tester en mode script.
-- **17/10 (J6)** — **Stratégie `prepare_card`** : Détecter d'abord si l'image est déjà au format carte (ratio ~1.587 ±10%). Si oui, simple `resize`. Si non, détection V2 + perspective. Si échec, renvoyer `None`. Raison : les cartes scannées (1000×630) n'ont pas de bord externe à détecter, la V2 échouait sur elles. Le `resize` direct est plus rapide et sans risque.
-- **17/10 (J6)** — **Pas de V1 en secours dans `prepare_card`**. Raison : la V1 suppose que l'utilisateur voit un cadre. Sans UI, recadrer une zone centrale au hasard produirait une carte fausse. La V1 sera codée dans `ui.py`.
-- **17/10 (J6)** — Création de `test/demo_quad.py`, `test/demo_perspective.py` et `test/test_prepare_card.py`. Raison : pédagogie visuelle (voir les coins, voir la perspective) et validation automatisée. Hors contrat §6.
+- **18/10 (J7)** — **`TESSERACT_PSM = 6`**. Raison : mode « bloc de texte uniforme », adapté à une carte (texte dense et homogène). À revoir si un champ spécifique (ex. zone photo) est mal isolé.
+- **18/10 (J7)** — **`OCR_MIN_WIDTH = 1500`**. Raison : en dessous, Tesseract lit des caractères de trop petite taille et confond `I/1/L`, `0/O`, `4/9`. Testé sur `_resize_500x315` : illisible. 1500 px de large est un compromis coût CPU / qualité sur AMD 3020e.
+- **18/10 (J7)** — **Prétraitement `gris + upscale + Otsu`**. Raison : Tesseract préfère nettement le noir-sur-blanc binaire ; nos tests préliminaires (thr_127, thr_200, otsu en J5) ont montré qu'Otsu généralise mieux sans réglage manuel.
+- **18/10 (J7)** — **Regex ancrées sur les étiquettes**, pas sur des valeurs « n'importe où ». Raison : le texte brut est pollué par les armoiries, zones photo, bordures et filigranes. S'ancrer sur `Nom :`, `NI.`, etc. élimine le bruit sans filtrage lourd.
+- **18/10 (J7)** — **Deux groupes dans `_RE_NUM`** `([A-Z])\s*(\d{6,8})` puis concaténation. Raison : le format est `LETTRE + 6-8 chiffres`. Deux groupes + concaténation = `B8078673` propre, sans espace parasite.
+- **18/10 (J7)** — **Filtre regex `carte_fictive_\d{2}\.jpg`** dans le test plutôt que `glob("carte_fictive_*")`. Raison : robuste aux futures variantes ; documenté dans le code.
 
 ## Signatures réelles des fonctions écrites (si elles diffèrent du contrat)
 
-- **`src/config.py`** : inchangé.
-- **`src/imaging.py`** :
-  - J1/J5 : `load_image`, `describe_image`, `to_grayscale`, `save_image`, `apply_blur`, `resize_image`, `apply_threshold`, `apply_otsu`, `detect_edges` + démos.
-  - **J6 (nouveau)** :
-    - `prepare_card(img: np.ndarray) -> np.ndarray | None` (Contrat §6 respecté).
-    - Helpers privés : `_order_corners(pts) -> np.ndarray`, `_quad_min_side(corners) -> float`, `_detect_card_quad(img) -> np.ndarray | None`.
+- **`src/config.py`** : toujours inchangé (contient `TESSERACT_LANG`, `TESSERACT_PSM`, `OCR_MIN_WIDTH` si présents, sinon valeurs par défaut utilisées via `getattr`).
+- **`src/imaging.py`** : inchangé depuis J6.
+  - `prepare_card(img) -> np.ndarray | None` (conforme contrat §6).
+  - Helpers privés : `_order_corners`, `_quad_min_side`, `_detect_card_quad`.
 - **`src/capture.py`** : inchangé.
-- **`test/demo_quad.py`** (pédagogique) : `order_corners`, `debug_edges`, `find_card_quad`, `draw_quad`, `main`.
-- **`test/demo_perspective.py`** (pédagogique) : `order_corners`, `warp_card`, `central_frame`, `main`.
-- **`test/test_prepare_card.py`** (test) : script de validation en boucle sur plusieurs images.
+- **`src/ocr.py`** (nouveau J7, conforme contrat §6) :
+  - `_preprocess(card_img: np.ndarray) -> np.ndarray` _(privée)_
+  - `extract_raw_text(card_img: np.ndarray) -> str`
+  - `extract_fields(card_img: np.ndarray) -> dict`
+  - Regex compilées module-level : `_RE_NOM`, `_RE_PP`, `_RE_DATE`, `_RE_NUM`.
+- **`test/test_ocr_raw.py`** (nouveau J7, pédagogique) : `main()`.
+- **`test/demo_quad.py`, `test/demo_perspective.py`, `test/test_prepare_card.py`** : inchangés (J6).
 
 ## Valeurs importantes (seuils, IP de l'ESP32, chemins)
 
 - Racine projet : `~/Documents/DevOps/Projet/id-verif/`
 - Python : 3.14.4 (dans `env/`)
 - ESP32-CAM : IP `10.135.250.228` (DHCP)
-- Taille cible carte : 1000 × 630 px (Ratio ≈ 1.587)
-- **Seuils `prepare_card` (V2)** :
-  - Tolérance ratio "déjà carte" : 10% (`abs(ratio_img - 1.587) / 1.587 < 0.10`)
-  - Taille min "déjà carte" : `w >= 600` et `h >= 375`
-  - Filtre bruit (contour) : `< 2%` de l'aire de l'image
-  - Epsilon `approxPolyDP` : `0.01` à `0.08`
-  - Seuil de rectangularité : `0.55`
-  - Seuil d'aire finale du quad : `5%` de l'image
-  - Côté minimum du quad : `150 px` (en dessous, l'OCR ne lira rien)
-- Seuil similarité faciale (SFace) : `0.363` (à calibrer)
-- Variable d'environnement Qt : `QT_QPA_PLATFORM=xcb`
+- Taille cible carte : 1000 × 630 px (ratio ≈ 1.587)
+- **Seuils `prepare_card` (J6)** : tolérance ratio 10 %, taille min « déjà carte » 600×375, epsilon `approxPolyDP` 0.01–0.08, rectangularité ≥ 0.55, aire quad ≥ 5 %, côté min quad 150 px.
+- **Seuils OCR (J7)** : `TESSERACT_LANG = "fra"`, `TESSERACT_PSM = 6`, `OCR_MIN_WIDTH = 1500`.
+- Seuil similarité faciale (SFace) : `0.363` (à calibrer en J9+).
+- Variable d'environnement Qt : `QT_QPA_PLATFORM=xcb`.
+- **Tesseract** : version **5.5.0**, packs `fra` + `eng` + `osd` présents.
 
 ## Notions apprises (pour me réinterroger plus tard)
 
-- **J6 — Contours et Polygones** : `cv2.findContours` trouve les lignes de séparation. `cv2.convexHull` enveloppe le contour pour gommer les bosses (bruit). `cv2.approxPolyDP` réduit un contour à un polygone (un epsilon petit garde les détails, un grand simplifie).
-- **J6 — Rectangularité** : Aire du quadrilatère / Aire de son rectangle englobant. Un rectangle parfait = 1.0. Sert à rejeter les faux quads (ex: un triangle très allongé).
-- **J6 — Ordre des coins** : `order_corners` sert à s'assurer que les points sont dans l'ordre TL (Haut-Gauche), TR (Haut-Droite), BR (Bas-Droite), BL (Bas-Gauche). Sans ça, la transformation de perspective peut retourner l'image en miroir ou à l'envers.
-- **J6 — Transformation de perspective** : `cv2.getPerspectiveTransform` calcule une matrice 3x3 pour "aplatir" une zone déformée (4 points quelconques) vers un rectangle parfait. `cv2.warpPerspective` applique ce calcul à tous les pixels de l'image.
-- **J6 — Ratio d'image** : `Largeur / Hauteur`. Permet de reconnaître si une image a déjà la forme d'une carte, évitant ainsi une détection de contours inutile (et souvent vouée à l'échec sur une image sans bordure).
-- **J6 — INTER_AREA vs INTER_LINEAR** : `INTER_AREA` est meilleur pour réduire une image (moyenne les pixels), évitant l'effet d'escalier. `INTER_LINEAR` est préféré pour agrandir (interpolation).
+- **J6 — Contours, polygones, perspective, ratio d'image** : voir session précédente (conservées).
+- **J7 — OCR** : transforme des pixels en caractères. Tesseract segmente en lignes → mots → caractères et compare à des formes apprises. Il préfère le **noir-sur-blanc binaire** à une photo brute.
+- **J7 — `pytesseract` vs `Tesseract`** : `pytesseract` est une **télécommande Python** ; le moteur `tesseract` (binaire système) doit être installé séparément avec ses packs de langue.
+- **J7 — PSM (Page Segmentation Mode)** : `6` = « suppose un bloc de texte uniforme » ; adapté aux cartes. D'autres modes ciblent une ligne unique (`7`), un seul mot (`8`), etc.
+- **J7 — Prétraitement OCR** : `gris → upscale INTER_CUBIC → Otsu`. L'upscale avant binarisation est **volontaire** : si on binarise d'abord puis qu'on agrandit, on crée des marches d'escalier ; agrandir d'abord garde des contours propres.
+- **J7 — Expressions régulières (regex)** : `\s*` = espaces optionnels ; `[A-Za-zÀ-ÿ]` = classe de lettres (accents inclus) ; `\.?` = point littéral optionnel ; `:=` (walrus) = assigne et teste en une expression.
+- **J7 — Piège classe de caractères** : `[I.L]` = « I ou . ou L » (le `.` est un caractère littéral **dans** une classe). Écrire `\.?[IL1]\.?` pour dire « point optionnel, puis I/L/1, puis point optionnel ».
+- **J7 — Ancrage sur étiquette** : chercher `Nom\s*:\s*(.+)` plutôt que de chercher un nom inconnu. L'étiquette élimine 99 % du bruit visuel (armoiries, filigranes).
+- **J7 — `re.fullmatch` vs `glob`** : `fullmatch` exige que **tout** le nom corresponde ; parfait pour écarter `carte_fictive_01_gray.jpg` quand on veut `carte_fictive_\d{2}\.jpg`.
+- **J7 — Confusion de caractères Tesseract** : `I ↔ L ↔ 1`, `0 ↔ O`, `4 ↔ 9`, accents perdus sur flou. Contournable partiellement en tolérant les classes (`[IL1]`).
+- **J7 — Deux causes d'erreur identifiées (livrable)** :
+  1. **Confusion de caractères** par Tesseract (fix regex possible).
+  2. **Bruit visuel de la carte** (armoiries, bordures, photo) qui s'invite dans le texte brut (fix par ancrage sur étiquettes).
+
+### Livrable J7 — Tableau du taux de lecture (état honnête)
+
+Sur **4 cartes fictives propres disponibles** (les seules restantes, `05..10` absentes) :
+
+| Champ            | C01           | C02                       | C03           | C04           | Taux    |
+| ---------------- | ------------- | ------------------------- | ------------- | ------------- | ------- |
+| `nom`            | ✅ MARTIN     | ✅ KABILA                 | ✅ MUKENDI    | ✅ ROBERT     | **4/4** |
+| `postnom`        | ✅ DUPONT     | ✅ MARTIN                 | ✅ DUPONT     | ✅ ROBERT     | **4/4** |
+| `prenom`         | ✅ Esther     | ✅ Alice                  | ✅ Chantal    | ✅ Joseph     | **4/4** |
+| `date_naissance` | ✅ 08/03/1966 | ✅ 03/09/1975             | ✅ 26/07/2002 | ✅ 16/04/1977 | **4/4** |
+| `numero`         | ✅ B8078673   | ✅ D3219824 _(après fix)_ | ✅ D5476257   | ✅ G6639317   | **4/4** |
+
+**Total : 20/20 champs lus sur 4 cartes.** ⚠️ Échantillon plus petit que les 10 demandés → à regénérer pour solidifier.
 
 ## Prochaine étape
 
-- **J1 à J6 sont clos.**
-- **À faire en tout début de prochaine session** :
-  - Fournir la **section J7** de la feuille de route avant tout nouveau code.
-  - Ne **pas** proposer `src/ocr.py`.
-  - Choisir la suite : soit attaquer **`database.py`** (création des tables, `add_person`, `get_person_by_number`), soit commencer **`ui.py`** pour câbler la V1 (`prepare_card` avec cadre-guide interactif).
+- **J1 à J7 clos.**
+- **À faire en début de prochaine session** :
+  - Fournir la **section J8** de la feuille de route avant tout nouveau code.
+  - Choisir : **`database.py`** (J8 probable — `init_db`, `add_person`, `get_person_by_number`, `log_verification`) **ou** avancer d'abord sur **`ui.py`** pour câbler la V1 `prepare_card` (cadre-guide).
 - **Points à intégrer le moment venu (aucun urgent)** :
-  - Réservation DHCP pour l'ESP32 ;
-  - Nettoyage de `data/samples/` ou filtrage du glob dans les tests ;
-  - Harmoniser le nom `demo_step.py` (étudiant) vs `demo_steps.py` (session précédente) ;
-  - Décider de la gestion propre des imports (package vs `sys.path`).
+  - **Regénérer `carte_fictive_05..10`** avec le script J3/J4 pour solidifier le tableau J7 (échantillon 10/10).
+  - Réservation DHCP pour l'ESP32.
+  - Gestion propre des imports `src/` (package vs `sys.path`).
+  - Harmoniser `demo_step.py` / `demo_steps.py`.
+  - Calibrer le seuil SFace (0.363 par défaut) en J9+.
