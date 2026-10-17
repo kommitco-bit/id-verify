@@ -1,6 +1,5 @@
 # src/imaging.py
-# Outils d'image : chargement, gris, sauvegarde, et (J5) flou gaussien.
-# Identifiants en anglais (snake_case), commentaires en français.
+# Outils d'image : chargement, gris, sauvegarde, flou gaussien (J5), resize (J5).
 
 import sys
 from pathlib import Path
@@ -12,7 +11,6 @@ from config import SAMPLES_DIR
 
 
 def load_image(path: str) -> np.ndarray | None:
-    """Charge une image en BGR. Renvoie None en cas d'échec."""
     img = cv2.imread(path)
     if img is None:
         print(f"ERREUR : impossible de lire {path}")
@@ -21,19 +19,16 @@ def load_image(path: str) -> np.ndarray | None:
 
 
 def describe_image(img: np.ndarray) -> tuple[int, int, int]:
-    """Renvoie (hauteur, largeur, canaux) d'une image."""
     h, w = img.shape[:2]
     c = img.shape[2] if img.ndim == 3 else 1
     return h, w, c
 
 
 def to_grayscale(img: np.ndarray) -> np.ndarray:
-    """Convertit une image BGR en niveaux de gris (1 canal)."""
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
 
 def save_image(img: np.ndarray, path: str) -> bool:
-    """Sauvegarde une image. Renvoie True si succès, False sinon."""
     ok = cv2.imwrite(path, img)
     if not ok:
         print(f"ERREUR : impossible d'écrire {path}")
@@ -41,18 +36,26 @@ def save_image(img: np.ndarray, path: str) -> bool:
 
 
 def apply_blur(img: np.ndarray, kernel_size: int = 5) -> np.ndarray | None:
-    """Applique un flou gaussien. kernel_size doit être impair (3, 5, 7...)."""
     if img is None:
         return None
-    # Un noyau gaussien doit être impair et >= 3, sinon OpenCV lève une erreur.
     k = max(3, kernel_size)
     if k % 2 == 0:
         k += 1
     return cv2.GaussianBlur(img, (k, k), 0)
 
 
+def resize_image(img: np.ndarray, width: int, height: int) -> np.ndarray | None:
+    """Redimensionne en (width × height). INTER_AREA pour réduire, INTER_LINEAR sinon."""
+    if img is None or width <= 0 or height <= 0:
+        return None
+    h0, w0 = img.shape[:2]
+    # INTER_AREA est le plus propre pour réduire (moyenne de blocs).
+    # INTER_LINEAR est un bon compromis pour agrandir.
+    interp = cv2.INTER_AREA if (width * height) < (w0 * h0) else cv2.INTER_LINEAR
+    return cv2.resize(img, (width, height), interpolation=interp)
+
+
 def demo_gray(input_path: str) -> None:
-    """Démo existante (J1) : charge, décrit, convertit en gris, sauvegarde."""
     img = load_image(input_path)
     if img is None:
         return
@@ -65,7 +68,6 @@ def demo_gray(input_path: str) -> None:
 
 
 def demo_blur(input_path: str, kernel_size: int = 5) -> None:
-    """Démo J5 : flou gaussien et sauvegarde pour comparaison visuelle."""
     img = load_image(input_path)
     if img is None:
         return
@@ -77,8 +79,23 @@ def demo_blur(input_path: str, kernel_size: int = 5) -> None:
         print(f"OK : flou (k={kernel_size}) sauvegardé -> {out}")
 
 
+def demo_resize(input_path: str, width: int = 500, height: int = 315) -> None:
+    img = load_image(input_path)
+    if img is None:
+        return
+    resized = resize_image(img, width, height)
+    if resized is None:
+        return
+    out = str(
+        Path(input_path).with_name(
+            Path(input_path).stem + f"_resize_{width}x{height}.jpg"
+        )
+    )
+    if save_image(resized, out):
+        print(f"OK : resize {width}x{height} sauvegardé -> {out}")
+
+
 if __name__ == "__main__":
-    # Usage : python imaging.py <chemin_image> [kernel]
     if len(sys.argv) < 2:
         print("Usage : python imaging.py data/samples/carte_fictive_01.jpg [kernel]")
         sys.exit(1)
@@ -86,3 +103,4 @@ if __name__ == "__main__":
     src = sys.argv[1]
     demo_gray(src)
     demo_blur(src, kernel)
+    demo_resize(src, 500, 315)  # moitié de 1000x630, même ratio
