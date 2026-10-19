@@ -53,6 +53,18 @@ STATUS_VALID = "VALIDE"
 STATUS_ANOMALY = "ANOMALIE"
 STATUS_NEED_MORE = "VERIFICATION_COMPLEMENTAIRE"
 
+# ===== J9 : seuils SFace — À AJOUTER à la fin de src/config.py =====
+# Calibré le 19/10 sur 6 paires (2 même-personne, 4 différentes) :
+#   min(même-personne) = 0.3414
+#   max(différentes)   = 0.0352
+# Compromis retenu : marge forte au-dessus du bruit, marge modérée sous le signal.
+SEUIL_SFACE = 0.30
+
+# Référence officielle OpenCV/SFace (sur grands jeux de données).
+# Conservée pour comparaison ; NE PAS l'utiliser comme seuil de décision ici
+# (rejetterait la personne A sur notre échantillon).
+SEUIL_SFACE_REFERENCE = 0.363
+
 
 # --- Utilitaires ------------------------------------------------------------
 def ensure_dirs() -> None:

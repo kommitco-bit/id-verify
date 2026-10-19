@@ -151,3 +151,37 @@ def get_embedding(img):
         print(f"[face] empreinte inattendue : taille={feat.size} (attendu 128)")
         return None
     return feat
+
+
+# ===== J9 : comparaison cosinus — À AJOUTER à la fin de src/face.py =====
+
+
+def compare(emb_a, emb_b):
+    """
+    Contrat §6 : deux empreintes -> float (similarité cosinus, plus haut = plus ressemblant).
+    Renvoie None si l'une est absente/invalide (au lieu de planter).
+    Résultat dans [-1, 1]. Seuil de décision : SEUIL_SFACE (config.py, à créer J9+).
+    """
+    # Garde-fous : None, types, tailles.
+    if emb_a is None or emb_b is None:
+        return None
+    a = np.asarray(emb_a, dtype=np.float32).flatten()
+    b = np.asarray(emb_b, dtype=np.float32).flatten()
+    if a.size == 0 or b.size == 0 or a.size != b.size:
+        return None
+
+    # Normes L2 (longueurs des vecteurs). On évite la division par zéro.
+    na = float(np.linalg.norm(a))
+    nb = float(np.linalg.norm(b))
+    if na < 1e-12 or nb < 1e-12:
+        return None
+
+    # Cosinus = produit scalaire divisé par le produit des normes.
+    cos = float(np.dot(a, b) / (na * nb))
+
+    # Petit garde-fou numérique : force dans [-1, 1] (erreurs flottantes ~1e-7).
+    if cos > 1.0:
+        cos = 1.0
+    if cos < -1.0:
+        cos = -1.0
+    return cos
