@@ -1,4 +1,6 @@
 # src/face.py — J8 étape 1 : détection de visage avec YuNet
+import os
+
 import cv2
 import numpy as np
 
@@ -86,3 +88,66 @@ def _crop_face(
     if x2 <= x1 or y2 <= y1:
         return None
     return img[y1:y2, x1:x2].copy()
+
+
+# ===== J9 : empreinte faciale (SFace) — À AJOUTER à la fin de src/face.py =====
+# Si os / numpy / cv2 sont déjà importés en haut du fichier, NE PAS les réimporter.
+
+
+# --- Singleton paresseux pour SFace (chargé une seule fois) ---
+_recognizer = None
+
+
+def _get_recognizer():
+    """Charge le modèle SFace via OpenCV une seule fois, réutilisé ensuite."""
+    global _recognizer
+    if _recognizer is None:
+        if not os.path.exists(SFACE_MODEL):
+            print(f"[face] Modèle SFace introuvable : {SFACE_MODEL}")
+            return None
+        # FaceRecognizerSF.create(model_path, config="") : config vide = défaut
+        _recognizer = cv2.FaceRecognizerSF.create(SFACE_MODEL, "")
+    return _recognizer
+
+
+# --- Empreinte faciale : 128 valeurs float32, ou None ---
+def get_embedding(img):
+    """
+    Contrat §6 : image contenant un visage -> np.ndarray float32 (128,), sinon None.
+    Étapes : détecter -> garder le plus grand visage -> aligner (112x112) -> feature.
+    """
+    if img is None:
+        return None
+
+    recognizer = _get_recognizer()
+    if recognizer is None:
+        return None
+
+    faces = _detect_faces(img)
+    if not faces:
+        return None
+
+    # On garde le plus grand visage (= le plus proche de la caméra).
+    face = max(faces, key=lambda f: f["bbox"][2] * f["bbox"][3])
+
+    # Reconstruire la ligne brute (1, 15) attendue par alignCrop :
+    # [x, y, w, h, lm1x, lm1y, lm2x, lm2y, ..., lm5x, lm5y, score]
+    x, y, w, h = face["bbox"]
+    lms = np.asarray(face["landmarks"], dtype=np.float32).flatten()
+    if lms.size != 10:
+        print(f"[face] landmarks inattendus : taille={lms.size} (attendu 10)")
+        return None
+    row = np.concatenate([[x, y, w, h], lms, [float(face["score"])]])
+    row = row.astype(np.float32).reshape(1, 15)
+
+    # alignCrop : recadre ET aligne le visage à 112x112 (entrée attendue par SFace).
+    aligned = recognizer.alignCrop(img, row)
+    if aligned is None or aligned.size == 0:
+        return None
+
+    # feature : vecteur (1, 128) float32 -> on aplatit en (128,).
+    feat = recognizer.feature(aligned).flatten().astype(np.float32)
+    if feat.size != 128:
+        print(f"[face] empreinte inattendue : taille={feat.size} (attendu 128)")
+        return None
+    return feat
