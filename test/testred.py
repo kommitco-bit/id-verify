@@ -36,4 +36,4 @@ def redimensionner(entree, sortie=None, qualite=85):
 
 
 if __name__ == "__main__":
-    redimensionner("images.jpeg")
+    redimensionner("Rose-M/test1_carte.jpg")
