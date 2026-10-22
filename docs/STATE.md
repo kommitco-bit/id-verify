@@ -1,6 +1,6 @@
-# STATE.md — mis à jour le 22/10, jour 10, avec DeepSeek
+# STATE.md — mis à jour le 23/10, jour 11, avec DeepSeek
 
-> **Note** : l'étudiant a confirmé (22/10) que **toutes** les fonctions et tests J10 fournis ont fonctionné à l'exécution ; il a simplement omis de coller les sorties. Le contenu ci-dessous reflète cette confirmation. Les statuts « ✅ confirmé » signifient : écrit **et** exécuté avec succès rapporté par l'étudiant, même sans trace collée.
+> **Note** : J10 confirmé le 22/10. J11 (recherche vectorielle) réalisé le 23/10. Statuts « ✅ confirmé » = écrit **et** exécuté avec succès rapporté par l'étudiant, avec sortie collée. Les propositions 2 et 4 sont marquées « fait » par l'étudiant le 23/10 mais **sans code ni sortie de test collés** → statut « rapporté fait, à re-confirmer ».
 
 ---
 
@@ -10,179 +10,123 @@
 - **Arborescence** : `~/Documents/DevOps/Projet/id-verif/` confirmée.
 - **J2, J3, J4** : ESP32-CAM (`/` et `/capture`) fonctionnel, `src/capture.py` (3 sources) fonctionnel.
 - **J5** : `imaging.py` (flou, resize, seuil, Otsu, Canny) fonctionnel.
-- **J6 (17/10)** : `prepare_card(img) -> np.ndarray | None` fonctionnel (détection V2 + perspective + resize direct). Testé et confirmé.
-- **J7 (18/10) — OCR** : Tesseract **5.5.0** + pack `fra` présents ; `pytesseract` + `Pillow` installés ; `src/ocr.py` V1+V2 conformes §6 (`extract_fields`, `extract_raw_text`, `_preprocess`) ; bug `_RE_NUM` corrigé ; **20/20 champs lus sur 4 cartes fictives**.
-- **J8 (19/10) — Détection YuNet** : modèles `.onnx` dans `models/` ; `src/face.py` V1 (`_get_detector`, `_detect_faces`, `_crop_face`) ; `test_face_detect.py` (score 0.935) et `test_face_detect_10.py` (10/10 frames, 0.868–0.910) confirmés. WARN OpenCV `setPreferableTarget` bénin, CPU only.
-- **J9 (19/10) — Empreintes SFace** : `_get_recognizer`, `get_embedding` (128 float32), `compare` (cosinus, clamp `[-1,1]`, garde-fous `None`) écrites et testées ; `test_sface_scores.py` sur 6 paires (`min MÊME = 0.3414`, `max DIFF = 0.0352`, 6/6 corrects à `SEUIL_SFACE = 0.30`). Seuil migré dans `config.py`.
-- **J10 (22/10) — Base SQLite** ✅ **confirmé fonctionnel par l'étudiant** :
-  - **`init_db()`** : fichier `data/db/id_verif.db` créé ; tables observées : `['persons', 'sqlite_sequence', 'verifications']` (sortie collée). `sqlite_sequence` créée automatiquement par SQLite (conséquence d'`AUTOINCREMENT`), **pas un bug**.
-  - **`add_person(fields, embedding)`** : écrit et exécuté, renvoie l'`id` attendu.
-  - **`get_person_by_number(numero)`** : écrit et exécuté, `embedding` revenu en `np.ndarray float32 (128,)`.
-  - **`log_verification(person_id, status, scores)`** : écrit et exécuté, `scores` stocké en `TEXT` JSON, `person_id=None` accepté.
-  - **`test/test_enroll_5.py`** : exécuté. Enrôlement `FICT-001..004` + `SYNTH-005` + ronde-trip BLOB (`compare(relu, orig) ≈ 1.0` en float32) validés.
-  - **`test/test_log_verification.py`** : exécuté. 2 passages insérés + relecture JSON (`json.loads(scores) == dict d'origine`) validés.
+- **J6 (17/10)** : `prepare_card(img) -> np.ndarray | None` fonctionnel (détection V2 + perspective + resize direct).
+- **J7 (18/10) — OCR** : Tesseract **5.5.0** + pack `fra` ; `src/ocr.py` conforme §6 ; **20/20 champs lus sur 4 cartes fictives**.
+- **J8 (19/10) — Détection YuNet** : `src/face.py` V1 (détection) ; `test_face_detect.py` et `test_face_detect_10.py` confirmés (10/10 frames). WARN OpenCV bénin, CPU only.
+- **J9 (19/10) — Empreintes SFace** : `get_embedding` (128 float32), `compare` (cosinus clampé, garde-fous `None`). `test_sface_scores.py` sur 6 paires confirmé (`min MÊME = 0.3414`, `max DIFF = 0.0352`).
+- **J10 (22/10) — Base SQLite** ✅ confirmé : `init_db`, `add_person`, `get_person_by_number`, `log_verification` ; `test/test_enroll_5.py` et `test/test_log_verification.py` exécutés.
+- **J11 (23/10) — Recherche vectorielle** ✅ confirmé :
+  - **`test/test_load_embeddings.py`** : lit les embeddings en base, affiche `id`, `numero`, `nom`, `shape`, `dtype`, `norme`. **4 personnes lues** (voir « En cours » pour `FICT-004`).
+  - **`src/vector_search.py`** : `find_nearest(embedding, k=3) -> list[(person_id, score)]` en force brute numpy. Auto-test `__main__` exécuté : requête `FICT-001` → `id=1 (1.0000)`, `id=2 (0.0762)`, `id=3 (0.0307)`. **La bonne personne est 1ʳᵉ.**
 
 ## En cours ou bloqué
 
-- **Jeu de données J9 insuffisant** : 4 photos / 6 paires ; suffisant pour un point de départ, insuffisant pour une calibration statistiquement solide.
-- **Scores MÊME bas pour SFace** (0.34, 0.43 vs 0.5–0.8 typiques) — pas un bug, à surveiller en J11+ (domaine « live webcam » ≠ « photo imprimée »).
-- **`config.py` incohérent §6** sur les seuils YuNet : `SCORE_THRESHOLD`, `NMS_THRESHOLD`, `TOP_K`, `margin` vivent toujours dans `src/face.py`. Seuls `SEUIL_SFACE` et `SEUIL_SFACE_REFERENCE` ont été migrés (J9). **`DB_PATH` et `VALID_STATUSES` vivent encore dans `database.py`** (J10) — nouvelle proposition ci-dessous.
-- **Jeu J7 incomplet** : seulement 4 cartes (`carte_fictive_01..04.jpg`), 05..10 absentes.
-- **`src/imaging.py`** : V1 du cadre-guide (`prepare_card` interactif) toujours non câblée — prévue pour `ui.py`.
-- **Imports `src/`** : toujours gérés par `sys.path.insert` dans les tests (solution package en attente).
-- **IP ESP32** : toujours DHCP `10.135.250.228`, réservation à envisager.
+- **Vérification post-modifications du 23/10** (propositions 2 et 4 « fait » par l'étudiant, code non collé) :
+  - **Prop. 2** (`(int(v) for v in face[:4])` dans `_detect_faces`) : risque faible, mais `test_face_detect.py`, `test_face_detect_10.py` et `test_sface_scores.py` **non re-passés** → à re-exécuter pour confirmer.
+  - **Prop. 4** (migration `DB_PATH` et `VALID_STATUSES` vers `src/config.py`) : **impacte `src/vector_search.py`** (J11) qui fait `from database import DB_PATH`. Soit un ré-export subsiste dans `database.py` (OK), soit `vector_search.py` doit être adapté. **À vérifier avant J12.** Tests de J10 et J11 (`test_enroll_5.py`, `test_log_verification.py`, `test_load_embeddings.py`, `__main__` de `vector_search.py`) **non re-passés** → à re-exécuter.
+- **`FICT-004` absent de la base** : `test_load_embeddings.py` (23/10) lit **4 personnes** au lieu de 5. Cause non diagnostiquée. **Non bloquant**. Diagnostic suggéré : `sqlite3 data/db/id_verif.db "SELECT id, numero FROM persons ORDER BY id;"`.
+- **Calibration `SEUIL_SFACE` fragile** : score `0.0762` observé sur un non-match (id=2), au-dessus du `max(DIFF) = 0.0352` calibré J9 (6 paires). Marge toujours confortable sous `0.30` (0.22), mais à consolider avant `decision.py`.
+- **Bonus ChromaDB reporté (option C)** : rien installé, stack §4 intacte. Reprise quand une vraie question de scaling se posera.
+- **Jeu de données J9 insuffisant** : 4 photos / 6 paires.
+- **Scores MÊME bas pour SFace** (0.34, 0.43 vs 0.5–0.8 typiques) — pas un bug, à surveiller en J12+.
+- **Jeu J7 incomplet** : 4 cartes, 05..10 absentes.
+- **`src/imaging.py`** : V1 du cadre-guide non câblée — prévue pour `ui.py`.
+- **Imports `src/`** : toujours gérés par `sys.path.insert` dans les tests.
+- **IP ESP32** : DHCP `10.135.250.228`, réservation à envisager.
 - **`capture.py` en mode flux** : réouverture caméra à chaque appel, non vérifiée sur la durée.
 
 ## Décisions prises (et pourquoi)
 
-- **18/10 (J7)** — `TESSERACT_PSM = 6`. Bloc de texte uniforme, adapté à une carte dense.
-- **18/10 (J7)** — `OCR_MIN_WIDTH = 1500`. En dessous, Tesseract confond `I/1/L`, `0/O`, `4/9`. Compromis CPU / qualité sur AMD 3020e.
-- **18/10 (J7)** — Prétraitement `gris → upscale INTER_CUBIC → Otsu`. Upscale **avant** binarisation.
-- **18/10 (J7)** — Regex ancrées sur les étiquettes (`Nom :`, `NI.`, etc.).
-- **18/10 (J7)** — Deux groupes dans `_RE_NUM` `([A-Z])\s*(\d{6,8})` + concaténation.
-- **19/10 (J8)** — Seuils YuNet `SCORE_THRESHOLD=0.6`, `NMS_THRESHOLD=0.3`, `TOP_K=5000` (défauts OpenCV, 10/10 en live). **À déplacer dans `config.py`** (proposition).
-- **19/10 (J8)** — Marge de recadrage `margin=0.2` (20 % autour de la bbox).
-- **19/10 (J8)** — `setInputSize((w, h))` à chaque `detect()`. Frames ESP32 ≠ cartes.
-- **19/10 (J8)** — Détection ≠ reconnaissance.
-- **19/10 (J9)** — `get_embedding` garde le **plus grand** visage (`max(faces, key=w*h)`).
-- **19/10 (J9)** — SFace brut ne normalise pas (norme ≈ 13). **Normalisation L2 déplacée dans `compare`**.
-- **19/10 (J9)** — Clamp `[-1, 1]` dans `compare` (erreurs flottantes ~10⁻⁷).
-- **19/10 (J9)** — Garde-fous `None` + tailles + norme nulle dans `compare`.
-- **19/10 (J9)** — `SEUIL_SFACE = 0.30` (au lieu de 0.363) : marge **0.265** au-dessus de `max(DIFF)`, marge **0.041** sous `min(MÊME)`. `SEUIL_SFACE_REFERENCE = 0.363` conservé pour documentation.
-- **19/10 (J9)** — Pas de renormalisation au stockage : embeddings bruts, `compare` normalise à la volée.
-- **22/10 (J10)** — Schéma `persons` avec `numero TEXT NOT NULL UNIQUE`. Raison : un matricule est unique par définition ; contrainte **au niveau base**, pas seulement applicatif.
-- **22/10 (J10)** — `embedding BLOB` stocké via `.tobytes()`, relu via `np.frombuffer(..., dtype=np.float32)`. Ronde-trip sans perte (512 octets = 128 × 4).
-- **22/10 (J10)** — `add_person` **lève** `TypeError` / `ValueError` sur `embedding` non-ndarray ou mauvais dtype. Raison : **bug de code**, pas donnée absente. Convention §6 « `None` au lieu de planter » ne vise que les **données manquantes**.
-- **22/10 (J10)** — Paramètre lié `?` partout dans `INSERT` / `SELECT`. Neutralise l'injection SQL.
-- **22/10 (J10)** — `VALID_STATUSES` fermé dans `database.py`. Refuse tout statut hors des 3 mots exacts du contrat §6.
-- **22/10 (J10)** — `log_verification` accepte `person_id = None` : passage ANOMALIE avant lookup = pas de personne associée, §6 ne l'interdit pas.
-- **22/10 (J10)** — `scores` stocké en `TEXT` JSON (`json.dumps(..., ensure_ascii=False, default=float)`). Raison : lisible via `sqlite3 CLI`, debug facilité. `default=float` neutralise tout `np.float32` résiduel.
-- **22/10 (J10)** — `test_enroll_5.py` force `fields["numero"] = "FICT-00i"` au lieu du numero OCR. Raison : `UNIQUE` rejetterait 2 cartes de la même personne (A1/A2 partagent probablement le même numero OCR). On accepte le doublon facial pour tester J11+ (« même visage, deux cartes » = ANOMALIE).
-- **22/10 (J10)** — 5ᵉ personne synthétique `rng.standard_normal(128).astype(np.float32)` avec `seed=42`. Reproductibilité, pas de nouvelle photo consentie sous la main, l'objet du test est la ronde-trip BLOB, pas la reconnaissance.
-- **22/10 (J10)** — Tolérance `abs(score - 1.0) < 1e-4` dans `test_enroll_5.py`. Raison : `compare(e, e) ≈ 0.99999988` (résidu float32 J9) — `== 1.0` strict échouerait.
+- **18/10 (J7)** — `TESSERACT_PSM = 6`, `OCR_MIN_WIDTH = 1500`, prétraitement `gris → upscale INTER_CUBIC → Otsu`, regex ancrées sur étiquettes, deux groupes dans `_RE_NUM`.
+- **19/10 (J8)** — Seuils YuNet `0.6 / 0.3 / 5000` + `margin=0.2`. `setInputSize` à chaque `detect`.
+- **19/10 (J9)** — `get_embedding` garde le plus grand visage ; SFace brut non normalisé (norme ≈ 13) → L2 dans `compare` ; clamp `[-1,1]` ; `SEUIL_SFACE = 0.30`, `SEUIL_SFACE_REFERENCE = 0.363` documentaire.
+- **22/10 (J10)** — Schéma `persons` avec `numero UNIQUE` ; `embedding BLOB` via `.tobytes()` / `np.frombuffer` ; `add_person` lève sur mauvais dtype ; paramètre lié `?` ; `VALID_STATUSES` fermé ; `log_verification` accepte `person_id = None` ; `scores` en JSON TEXT.
+- **23/10 (J11)** — Force brute numpy retenue (simple, transparente, réutilise `face.compare` et `DB_PATH`) ; garde-fous symétriques J10 ; tri + slice `[:k]` (pas de `heapq`) ; bonus ChromaDB différé (option C).
+- **23/10 (post-J11) — Proposition 2 « rapportée faite »** : `(int(v) for v in face[:4])` dans `_detect_faces`. Raison J8 : logs propres (évite `numpy.int64` dans les `print`). Code non collé, tests **non re-passés** → à re-confirmer.
+- **23/10 (post-J11) — Proposition 4 « rapportée faite »** : migration `DB_PATH` + `VALID_STATUSES` vers `src/config.py` pour respecter §6 (« tous les chemins et seuils vivent dans `config.py` »). Code non collé, tests **non re-passés**, `vector_search.py` **potentiellement impacté** → à re-confirmer avant J12.
 
 ## Signatures réelles des fonctions écrites (si elles diffèrent du contrat)
 
 - **`src/config.py`** :
   - `TESSERACT_LANG = "fra"`, `TESSERACT_PSM = 6`, `OCR_MIN_WIDTH = 1500`.
   - `SEUIL_SFACE = 0.30`, `SEUIL_SFACE_REFERENCE = 0.363`.
-  - **Toujours absents** : `SCORE_THRESHOLD`, `NMS_THRESHOLD`, `TOP_K`, `margin`, `DB_PATH`, `VALID_STATUSES`.
-- **`src/imaging.py`** : `prepare_card(img) -> np.ndarray | None` (conforme §6). Helpers `_order_corners`, `_quad_min_side`, `_detect_card_quad`.
+  - **`DB_PATH` et `VALID_STATUSES` déplacés ici le 23/10** (prop. 4 rapportée faite, **à confirmer**) — donc `database.py` doit les importer depuis `config`, et `vector_search.py` doit soit continuer à faire `from database import DB_PATH` (si ré-export), soit passer à `from config import DB_PATH`.
+  - **Toujours absents** : `SCORE_THRESHOLD`, `NMS_THRESHOLD`, `TOP_K`, `margin` (YuNet), `CHROMA_DIR`.
+- **`src/imaging.py`** : `prepare_card(img) -> np.ndarray | None` (conforme §6).
 - **`src/capture.py`** : `get_frame(source: str) -> np.ndarray | None` (conforme §6).
-- **`src/ocr.py`** : `_preprocess`, `extract_raw_text`, `extract_fields` + regex `_RE_NOM`, `_RE_PP`, `_RE_DATE`, `_RE_NUM`.
+- **`src/ocr.py`** : `_preprocess`, `extract_raw_text`, `extract_fields` + regex.
 - **`src/face.py`** :
-  - `_get_detector()`, `_detect_faces(img)`, `_crop_face(img, bbox, margin=0.2)`, `_get_recognizer()` (privées).
-  - `get_embedding(img) -> np.ndarray float32 (128,) | None` ✅
-  - `compare(emb_a, emb_b) -> float | None` ✅
+  - `_get_detector()`, `_detect_faces(img)`, `_crop_face(img, bbox, margin=0.2)`, `_get_recognizer()`.
+  - **`_detect_faces` modifié le 23/10** : `(int(v) for v in face[:4])` au lieu de `face[:4].astype(int)` (prop. 2 rapportée faite, **à confirmer**).
+  - `get_embedding(img) -> np.ndarray float32 (128,) | None` ✅ ; `compare(emb_a, emb_b) -> float | None` ✅.
   - Constantes module : `YUNET_MODEL`, `SFACE_MODEL`, `SCORE_THRESHOLD`, `NMS_THRESHOLD`, `TOP_K`.
-- **`src/database.py`** — **4/4 fonctions du contrat §6, toutes écrites et exécutées** :
-  - `init_db() -> None` ✅ confirmé.
-  - `add_person(fields: dict, embedding: np.ndarray) -> int` ✅ confirmé.
-  - `get_person_by_number(numero: str) -> dict | None` ✅ confirmé. `person["embedding"]` est un `np.ndarray float32 (128,)` (pas BLOB).
-  - `log_verification(person_id: int | None, status: str, scores: dict) -> None` ✅ confirmé.
-  - Constantes module : `PROJECT_ROOT`, `DB_PATH`, `VALID_STATUSES`.
+- **`src/database.py`** — 4/4 fonctions §6 ✅ :
+  - `init_db()`, `add_person(fields, embedding)`, `get_person_by_number(numero)`, `log_verification(person_id, status, scores)`.
+  - **Modifié le 23/10** : `DB_PATH` et `VALID_STATUSES` déplacés vers `config.py` (prop. 4 rapportée faite, **à confirmer**). Si non ré-exportés, tout code faisant `from database import DB_PATH` casse — **`vector_search.py` est le premier concerné**.
+- **`src/vector_search.py`** (nouveau J11) ✅ :
+  - `find_nearest(embedding: np.ndarray, k: int = 3) -> list[tuple[int, float]]` **conforme §6**.
+  - **Point de vigilance post-prop. 4** : `from database import DB_PATH` à valider — si `DB_PATH` a migré vers `config.py` sans ré-export dans `database.py`, **cette ligne casse silencieusement au prochain run** (ModuleNotFoundError / ImportError).
 - **Tests** :
-  - `test/test_enroll_5.py` (J10) ✅ exécuté, confirmé.
-  - `test/test_log_verification.py` (J10) ✅ exécuté, confirmé.
-  - `test/test_face_detect.py`, `test/test_face_detect_10.py`, `test/test_sface_scores.py`, `test/test_ocr_raw.py`, `test/demo_quad.py`, `test/demo_perspective.py`, `test/test_prepare_card.py` : inchangés.
+  - `test/test_load_embeddings.py` (nouveau J11) ✅ exécuté **avant** les modifications de prop. 2 et 4.
+  - `test/test_enroll_5.py`, `test/test_log_verification.py` (J10) ✅ exécutés **avant** prop. 4 — **à re-passer**.
+  - `test/test_face_detect.py`, `test/test_face_detect_10.py`, `test/test_sface_scores.py` — **à re-passer** post-prop. 2.
+  - `test/test_ocr_raw.py`, `test/demo_quad.py`, `test/demo_perspective.py`, `test/test_prepare_card.py` : inchangés.
 
 ## Valeurs importantes (seuils, IP de l'ESP32, chemins)
 
 - Racine projet : `~/Documents/DevOps/Projet/id-verif/`
 - Python : 3.14.4 (dans `env/`)
 - ESP32-CAM : IP `10.135.250.228` (DHCP)
-- Taille cible carte : 1000 × 630 px (ratio ≈ 1.587)
-- Seuils `prepare_card` (J6) : tolérance ratio 10 %, taille min « déjà carte » 600×375, epsilon `approxPolyDP` 0.01–0.08, rectangularité ≥ 0.55, aire quad ≥ 5 %, côté min quad 150 px.
-- Seuils OCR (J7) : `TESSERACT_LANG = "fra"`, `TESSERACT_PSM = 6`, `OCR_MIN_WIDTH = 1500`.
-- Seuils YuNet (J8, dans `src/face.py`) : `SCORE_THRESHOLD = 0.6`, `NMS_THRESHOLD = 0.3`, `TOP_K = 5000`. Marge `margin = 0.2`.
-- Seuils SFace (J9, dans `src/config.py`) : `SEUIL_SFACE = 0.30` (décision), `SEUIL_SFACE_REFERENCE = 0.363` (documentation).
-- Calibration J9 (19/10) : `min(MÊME) = 0.3414` / `0.4319` ; `max(DIFF) = 0.0352` ; autres DIFF −0.0110, −0.1167, −0.0157. 6/6 corrects à 0.30.
+- Taille cible carte : 1000 × 630 px
+- Seuils `prepare_card` (J6) : tolérance ratio 10 %, taille min 600×375, epsilon 0.01–0.08, rectangularité ≥ 0.55, aire quad ≥ 5 %, côté min 150 px.
+- Seuils OCR (J7) : `fra`, PSM 6, `OCR_MIN_WIDTH = 1500`.
+- Seuils YuNet (J8, **toujours dans `face.py`** — prop. 1 non faite) : `SCORE_THRESHOLD = 0.6`, `NMS_THRESHOLD = 0.3`, `TOP_K = 5000`, `margin = 0.2`.
+- Seuils SFace (J9, `config.py`) : `SEUIL_SFACE = 0.30`, `SEUIL_SFACE_REFERENCE = 0.363`.
+- **Calibration J9 (19/10)** : `min(MÊME) = 0.3414` / `0.4319` ; `max(DIFF) = 0.0352`.
+- **Observation J11 (23/10)** : self `1.0000`, non-match `0.0762` (id=2), `0.0307` (id=3). Calibration J9 à consolider.
 - Modèles : `models/face_detection_yunet_2023mar.onnx`, `models/face_recognition_sface_2021dec.onnx`.
-- Variable d'environnement Qt : `QT_QPA_PLATFORM=xcb`.
-- Tesseract : version **5.5.0**, packs `fra` + `eng` + `osd`.
-- **Base SQLite J10** : `~/Documents/DevOps/Projet/id-verif/data/db/id_verif.db` (créée et opérationnelle).
-- **Schéma `persons`** : `id INTEGER PK AUTOINCREMENT`, `nom TEXT`, `postnom TEXT`, `prenom TEXT`, `date_naissance TEXT`, `numero TEXT NOT NULL UNIQUE`, `embedding BLOB`.
-- **Schéma `verifications`** : `id INTEGER PK AUTOINCREMENT`, `person_id INTEGER` (FK optionnelle, PRAGMA non activée), `status TEXT`, `scores TEXT`, `created_at TEXT DEFAULT CURRENT_TIMESTAMP`.
-- **`VALID_STATUSES`** : `{"VALIDE", "ANOMALIE", "VERIFICATION_COMPLEMENTAIRE"}`.
-- Personnes enrôlées en base (via `test_enroll_5.py`) : `FICT-001..004` + `SYNTH-005` (5 lignes dans `persons`).
+- Variable Qt : `QT_QPA_PLATFORM=xcb`.
+- Tesseract : **5.5.0**, packs `fra` + `eng` + `osd`.
+- Base SQLite : `data/db/id_verif.db`.
+- **Schéma `persons`** : `id INTEGER PK AUTOINCREMENT`, `nom`, `postnom`, `prenom`, `date_naissance` TEXT, `numero TEXT NOT NULL UNIQUE`, `embedding BLOB`.
+- **Schéma `verifications`** : `id PK AUTOINCREMENT`, `person_id INTEGER` (FK non activée), `status TEXT`, `scores TEXT`, `created_at DEFAULT CURRENT_TIMESTAMP`.
+- **`VALID_STATUSES`** : `{"VALIDE", "ANOMALIE", "VERIFICATION_COMPLEMENTAIRE"}` — **localisation à confirmer** (avant : `database.py` ; après prop. 4 : `config.py`).
+- **Personnes actuellement en base (23/10)** : **4 lignes** — `id=1 FICT-001`, `id=2 FICT-002`, `id=3 FICT-003`, `id=4 SYNTH-005`. **`FICT-004` absent.**
+- **Normes observées (23/10)** : `13.03`, `9.62`, `10.54`, `9.01`.
 
 ## Notions apprises (pour me réinterroger plus tard)
 
 **J6 — Contours, polygones, perspective, ratio d'image** (conservées).
 
-**J7 — OCR** : pixels → caractères. Tesseract segmente lignes → mots → caractères. Préfère noir-sur-blanc binaire.
+**J7 — OCR** : pixels → caractères ; Tesseract segmente lignes → mots → caractères ; `pytesseract` = télécommande, Tesseract = moteur ; PSM 6 = bloc uniforme ; `gris → upscale → Otsu` ; regex ancrées ; confusions `I/L/1`, `0/O`, `4/9`.
 
-- `pytesseract` vs Tesseract (télécommande ↔ moteur).
-- PSM `6` = bloc uniforme.
-- Prétraitement : `gris → upscale INTER_CUBIC → Otsu`.
-- Regex : `\s*`, `[A-Za-zÀ-ÿ]`, `\.?`, walrus `:=`.
-- Piège `[I.L]` = « I ou . ou L ».
-- Ancrage sur étiquette vs « n'importe où ».
-- `re.fullmatch` vs `glob`.
-- Confusions Tesseract : `I ↔ L ↔ 1`, `0 ↔ O`, `4 ↔ 9`.
+**J8 — YuNet** : détection ≠ reconnaissance ; bbox ; landmarks ; modèle ONNX = filtre préfabriqué ; `(N, 15)` par frame ; singleton paresseux ; `setInputSize` avant `detect`.
 
-**J8 — Détection de visage (YuNet)** :
+**J9 — SFace** : embedding = vecteur 128 float32 ; inférence seule ; `alignCrop` 112×112 ; cosinus = angle ; SFace brut non normalisé (norme ≈ 13) → L2 dans `compare` ; `compare(e,e) ≈ 0.99999988` ; FAR grave / FRR pénible ; marge `(max(DIFF), min(MÊME))`.
 
-- Détection ≠ reconnaissance.
-- bbox `(x, y, w, h)`.
-- Landmarks = 5 points (yeux, nez, coins de bouche).
-- Modèle ONNX = filtre préfabriqué exécutable par OpenCV.
-- Inférence = passage d'une image dans le modèle.
-- `cv2.FaceDetectorYN` → sortie `(N, 15)` par frame (4 bbox + 10 landmarks + 1 score).
-- Singleton paresseux : chargé une fois, réutilisé.
-- `setInputSize` avant `detect` : taille réelle requise.
-- WARN OpenCV 4.9+ bénin.
+**J10 — SQLite** : table ↔ classeur ; `PRIMARY KEY` ; `UNIQUE NOT NULL` ; `IF NOT EXISTS` idempotent ; BLOB ↔ `np.frombuffer` sans copie ; `?` anti-injection ; `cur.lastrowid` ; `row_factory` ; `json.dumps/loads` non symétrique avec `np.float32` → `default=float` ; `with sqlite3.connect(...)` gère la transaction, pas la fermeture ; `sqlite_sequence` = interne `AUTOINCREMENT` ; FK écrite mais non active ; enrôlement = `OCR → get_embedding → INSERT` ; fail-fast sur bug code, `None` sur donnée absente.
 
-**J9 — Empreintes faciales (SFace)** :
+**J11 — Recherche vectorielle** : vecteur = flèche à N dimensions ; 1:N = « qui me ressemble parmi N », 1:1 = « est-ce X » ; force brute = O(N) par requête ; tri décroissant + `[:k]` = k plus proches voisins ; ChromaDB renvoie `distance = 1 − similarité` (reconvertir pour rester aligné sur `face.compare`) ; index vectoriel (HNSW/IVF) = accélère à grande échelle au prix d'approximation + mémoire ; pièges ChromaDB (`ids` en `str`, `embedding_function=None`, `n_results ≤ count()`, `hnsw:space = "cosine"`) ; garde-fous à trois niveaux (None → `[]`, bug → `raise`, ligne corrompue → `continue`).
 
-- Embedding = vecteur 128 float32 qui résume un visage.
-- Entraînement vs inférence : SFace déjà entraîné, **on ne fait que de l'inférence**.
-- `alignCrop` : recadre + aligne à 112×112 via 5 landmarks. **Obligatoire** pour SFace.
-- `FaceRecognizerSF.create(model, "")` : config vide = défauts OpenCV.
-- Similarité cosinus : `dot(a,b)/(‖a‖·‖b‖)`, mesure l'**angle**, résultat `[-1, 1]`, insensible à la norme.
-- SFace brut non normalisé (norme ≈ 13) → L2 dans `compare`.
-- Précision float32 : `compare(e,e) ≈ 0.99999988`.
-- Seuil de décision = frontière même/différent (analogie alarme de bruit).
-- Faux positif (FAR) = usurpation, **grave** ; faux négatif (FRR) = rejet légitime, **pénible**.
-- Compromis de seuil : privilégier la sécurité (minimiser FAR).
-- Marge de séparation : `lo = max(DIFF)`, `hi = min(MÊME)`. Si `hi > lo`, tout seuil dans `(lo, hi)` sépare parfaitement.
-- `itertools.combinations` : `n(n−1)/2` paires.
-
-**J10 — Base de données SQLite** :
-
-- Table = classeur à colonnes fixes ; ligne = fiche dedans.
-- Clé primaire (`PRIMARY KEY`) = identifiant unique. `AUTOINCREMENT` laisse SQLite attribuer.
-- `UNIQUE NOT NULL` = refuse doublons **et** NULL sur la colonne.
-- `IF NOT EXISTS` rend `CREATE` idempotent (relançable sans casser).
-- BLOB = octets bruts. Aller/retour ndarray via `.tobytes()` / `np.frombuffer(..., dtype=...)`.
-- `np.frombuffer` = **réinterprétation sans copie**, pas une conversion. `dtype` doit correspondre à l'origine.
-- Paramètre lié `?` = échappement SQLite → neutralise l'injection SQL.
-- `cur.lastrowid` = id attribué après `INSERT`.
-- `row_factory = sqlite3.Row` = accès par nom de colonne (`row["nom"]`).
-- `json.dumps` / `json.loads` : sérialisation dict ↔ texte. **Non symétrique** avec `np.float32` → `default=float` à l'écriture.
-- **`with sqlite3.connect(...) as conn`** : gère la **transaction** (commit/rollback), **pas** la fermeture de la connexion (nuance).
-- `sqlite_sequence` : table interne SQLite créée dès qu'on utilise `AUTOINCREMENT`.
-- `FOREIGN KEY` écrite dans le schéma mais **non active** par défaut en SQLite (PRAGMA `foreign_keys` OFF).
-- **Enrôlement** : pipeline `OCR → get_embedding → INSERT`, porte d'entrée de `persons`.
-- **Fail-fast** : `raise` sur bug de code (mauvais dtype), `None` sur donnée absente. Convention §6 ne vise que le second cas.
-- **Ronde-trip BLOB** : `tobytes()` puis `frombuffer(dtype=np.float32)` redonne l'empreinte bit-à-bit, ce qui se vérifie via `compare(relu, orig) ≈ 1.0`.
+**Nouveau (23/10, post-J11) — Impact d'une migration de constantes** : déplacer `DB_PATH` de `database.py` vers `config.py` **casse tout import `from database import DB_PATH`** sauf si `database.py` fait un **ré-export** (`from config import DB_PATH`). C'est un exemple classique de **couplage implicite par import** : un module peut devenir « boîte aux lettres » d'une constante qui vit ailleurs. Leçon : après ce type de migration, **re-passer tous les tests qui touchent l'import concerné**, même si le code « a l'air » inchangé.
 
 ## Prochaine étape
 
-- **J1 à J10 clos** (le J10 a été confirmé fonctionnel par l'étudiant le 22/10).
-- **Début de J11 — à faire avant tout code** :
-  1. **Fournir la section J11** de la feuille de route (règle §7).
-  2. Attendu probable J11 selon le brief (§6) : soit `src/vector_search.py` (`find_nearest(embedding, k=3) -> list[(person_id, score)]`, force brute numpy), soit `src/decision.py` (`decide(fields, card_emb, live_emb, person) -> dict`). À confirmer par la feuille.
-- **Points à consolider après J9/J10 (aucun urgent)** :
-  - Recalibrer SFace dès que paires MÊME supplémentaires disponibles (angles variés, autres personnes consenties). Recalculer `min(MÊME)` et `max(DIFF)`, ajuster `SEUIL_SFACE`.
-  - Surveiller live vs carte en J11+ (domaine différent, scores possiblement plus bas).
-  - Regénérer `carte_fictive_05..10` pour solidifier le tableau J7.
-  - Réservation DHCP pour l'ESP32.
-  - Package Python propre pour `src/`.
-  - Harmoniser `demo_step.py` / `demo_steps.py`.
-  - Mode « flux continu » dans `capture.py` si nécessaire.
-- **Propositions en attente (aucune appliquée)** :
-  - **PROPOSITION** : déplacer `SCORE_THRESHOLD`, `NMS_THRESHOLD`, `TOP_K`, `margin` (YuNet) dans `src/config.py` (cohérence §6).
-  - **PROPOSITION** : remplacer `face[:4].astype(int)` par `(int(v) for v in face[:4])` dans `_detect_faces` (logs propres).
-  - **PROPOSITION** : convertir `src/` en package Python (`__init__.py` + imports relatifs).
-  - **PROPOSITION (J10)** : migrer `DB_PATH` **et** `VALID_STATUSES` dans `src/config.py` (contrat §6 « tous les chemins et seuils vivent dans config.py »). Aucun impact fonctionnel.
+- **J1 à J11 clos** (J11 confirmé fonctionnel le 23/10).
+- **Avant J12 — 3 vérifications à faire (ordre suggéré) :**
+  1. **Coller le contenu actuel de `src/config.py` et `src/database.py`** (pour que je vérifie où vivent `DB_PATH` et `VALID_STATUSES` et si un ré-export existe). Sans ça, je ne peux pas garantir que `vector_search.py` fonctionne encore.
+  2. **Coller le diff (ou le contenu) de `_detect_faces` dans `src/face.py`** (prop. 2).
+  3. **Re-passer les tests impactés** :
+     - `test_face_detect.py`, `test_face_detect_10.py`, `test_sface_scores.py` (post-prop. 2).
+     - `test_enroll_5.py`, `test_log_verification.py`, `test_load_embeddings.py`, `python src/vector_search.py` (post-prop. 4).
+- **Début de J12 — à faire avant tout code** : fournir la **section J12** de la feuille de route (§7). Attendu probable : `src/decision.py` (`decide(fields, card_emb, live_emb, person)`). **À confirmer par la feuille.**
+- **Points à consolider (aucun urgent)** : diagnostic `FICT-004` ; recalibration `SEUIL_SFACE` ; surveillance live vs carte ; cartes 05..10 ; DHCP ESP32 ; package Python `src/` ; harmonisation `demo_step.py`/`demo_steps.py`.
+- **Propositions restant en attente (aucune appliquée)** :
+  - **PROP. 1** — déplacer seuils YuNet (`SCORE_THRESHOLD`, `NMS_THRESHOLD`, `TOP_K`, `margin`) vers `config.py`. **Non faite le 23/10.**
+  - **PROP. 3** — convertir `src/` en package Python (`__init__.py` + imports relatifs). **Non faite le 23/10.**
+  - **PROP. 5** — ajouter `CHROMA_DIR` à `config.py` quand le bonus C sera réalisé. **Non faite le 23/10 (normal, bonus C différé).**
+- **Bonus C — différé** : ChromaDB non installé, reprise quand une vraie question de scaling se posera.
+
+---
+
+**Rappel de prochaine étape immédiate** : colle-moi `src/config.py` + `src/database.py` actuels (et idéalement le diff de `_detect_faces`). Je te confirmerai en 2 lignes si `vector_search.py` fonctionne toujours tel quel, ou s'il faut une correction minimale.
