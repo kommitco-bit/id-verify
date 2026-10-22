@@ -6,10 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "data" / "db" / "id_verif.db"
-
-VALID_STATUSES = {"VALIDE", "ANOMALIE", "VERIFICATION_COMPLEMENTAIRE"}
+from config import DB_PATH, VALID_STATUSES
 
 
 def init_db() -> None:

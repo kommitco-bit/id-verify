@@ -52,7 +52,7 @@ VECTOR_SEARCH_K = 3
 STATUS_VALID = "VALIDE"
 STATUS_ANOMALY = "ANOMALIE"
 STATUS_NEED_MORE = "VERIFICATION_COMPLEMENTAIRE"
-
+VALID_STATUSES = {"VALIDE", "ANOMALIE", "VERIFICATION_COMPLEMENTAIRE"}
 # ===== J9 : seuils SFace — À AJOUTER à la fin de src/config.py =====
 # Calibré le 19/10 sur 6 paires (2 même-personne, 4 différentes) :
 #   min(même-personne) = 0.3414
