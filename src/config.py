@@ -59,6 +59,7 @@ VALID_STATUSES = {"VALIDE", "ANOMALIE", "VERIFICATION_COMPLEMENTAIRE"}
 #   max(différentes)   = 0.0352
 # Compromis retenu : marge forte au-dessus du bruit, marge modérée sous le signal.
 SEUIL_SFACE = 0.30
+SCORE_FACE_REJECT = 0.20
 
 # Référence officielle OpenCV/SFace (sur grands jeux de données).
 # Conservée pour comparaison ; NE PAS l'utiliser comme seuil de décision ici
